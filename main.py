@@ -8,14 +8,30 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+ENV = os.getenv("ENV", "local")
 
 # Initialize logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log_dir = "logs"
+if ENV == "local":
+    os.makedirs(log_dir, exist_ok=True)
+    log_filename = datetime.now().strftime(f"{log_dir}/log_%Y%m%d_%H%M%S.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_filename),
+            logging.StreamHandler()
+        ]
+    )
+else:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 logger = logging.getLogger(__name__)
 
 # Initialize Telegram bot
@@ -107,27 +123,30 @@ async def send_trade_execution(request: TradeExecutionRequest):
     """Send a structured trade execution message to the Telegram bot."""
     try:
         logger.info("📨 Preparing trade execution message for Telegram...")
+
+        # Generate a well-aligned, friendly message format
         trade_message = f"""
-        <b>Trade Execution Alert 🚀</b>
-        <b>📝 Side:</b> {request.side}
-        <b>💰 Crypto:</b> {request.crypto}
-        <b>📉 Price:</b> ${request.price:.2f}
-        <b>📊 Quantity:</b> {request.quantity} {request.crypto}
-        <b>💸 Total Cost:</b> ${request.total_cost:.2f}
-        <b>📈 Binance Fee ({request.binance_fee_percentage}%):</b> ${request.binance_fee_amount:.2f}
-        <b>💵 Net Total:</b> ${request.net_total:.2f}
-        <b>🆔 Binance Order ID:</b> {request.binance_order_id}
-        """
+<b>🚀 Trade Execution Alert</b>
+
+<b>📝 Side:</b>           {request.side}
+<b>💰 Crypto:</b>        {request.crypto}
+<b>📉 Price:</b>         ${request.price:,.2f}
+<b>📊 Quantity:</b>      {request.quantity} {request.crypto}
+<b>💸 Total Cost:</b>    ${request.total_cost:,.2f}
+<b>📈 Fee ({request.binance_fee_percentage}%):</b> ${request.binance_fee_amount:,.2f}
+<b>💵 Net Total:</b>     ${request.net_total:,.2f}
+<b>🆔 Order ID:</b>      {request.binance_order_id}
+"""
 
         if request.side == "SELL":
             trade_message += f"""
-            <b>📈 Profit/Loss (%):</b> {request.profit_loss_percentage:.2f}%
-            <b>💵 Profit/Loss (USDT):</b> ${request.profit_loss_usdt:.2f}
-            <b>📉 Average Buy Price:</b> ${request.avg_buy_price:.2f}
-            <b>💰 Sell Price:</b> ${request.sell_price:.2f}
-            """
+<b>📈 Profit/Loss %:</b> {request.profit_loss_percentage:.2f}%
+<b>💵 Profit/Loss:</b>   ${request.profit_loss_usdt:,.2f}
+<b>📉 Avg Buy Price:</b> ${request.avg_buy_price:,.2f}
+<b>💰 Sell Price:</b>    ${request.sell_price:,.2f}
+"""
 
-        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=trade_message, parse_mode="HTML")
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=trade_message.strip(), parse_mode="HTML")
         logger.info("📈 Trade execution message sent successfully.")
         return {"status": "Trade execution message sent"}
     except TelegramAPIError as e:
