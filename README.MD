@@ -46,18 +46,22 @@ through structured alerts.
    ```plaintext
    TELEGRAM_TOKEN=your_telegram_token
    TELEGRAM_CHAT_ID=your_telegram_chat_id
-   ENV=local  # Change to "production" for production environment
+   ENV=local  # Set to "production" for production environments
+   HOST=0.0.0.0  # Default host
+   PORT=8000     # Default port
    ```
 
 ## ▶️ Running the API
 
-To start the API in development mode:
+To start the API in development mode, use:
 
 ```bash
-uvicorn main:app --reload
+python main.py
 ```
 
-The API will run at `http://127.0.0.1:8000`.
+This command will start the server with `uvicorn` using the specified HOST and PORT in the `.env` file.
+
+The API will run at `http://127.0.0.1:8000` if the default host and port are used.
 
 ## 📌 Endpoints
 
