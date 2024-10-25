@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator, PositiveFloat, ValidationInfo
-from typing import Optional, Literal
+from typing import Optional, Literal, Final, TypedDict
 import logging
 import os
 import html
@@ -9,37 +9,46 @@ from aiogram.exceptions import TelegramAPIError
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from datetime import datetime
+import uvicorn
 
 # Load environment variables
 load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-ENV = os.getenv("ENV", "local")
+TELEGRAM_TOKEN: Final[str] = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID: Final[str] = os.getenv("TELEGRAM_CHAT_ID")
+ENV: Final[str] = os.getenv("ENV", "local")
+HOST: Final[str] = os.getenv("HOST", "0.0.0.0")
+PORT: Final[int] = int(os.getenv("PORT", 8000))
 
 # Initialize logging
-log_dir = "logs"
-if ENV == "local":
-    os.makedirs(log_dir, exist_ok=True)
-    log_filename = datetime.now().strftime(f"{log_dir}/log_%Y%m%d_%H%M%S.log")
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_filename),
-            logging.StreamHandler()
-        ]
-    )
-else:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+def setup_logging():
+    log_dir: Final[str] = "logs"
+    if ENV == "local":
+        os.makedirs(log_dir, exist_ok=True)
+        log_filename = datetime.now().strftime(f"{log_dir}/log_%Y%m%d_%H%M%S.log")
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[
+                logging.FileHandler(log_filename),
+                logging.StreamHandler()
+            ]
+        )
+    else:
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    return logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
-# Initialize Telegram bot
-logger.info("🔄 Initializing Telegram Bot...")
-bot = Bot(token=TELEGRAM_TOKEN)
-logger.info("✅ Telegram Bot initialized successfully.")
+# Initialize Telegram Bot
+def initialize_bot(token: str) -> Bot:
+    logger.info("🔄 Initializing Telegram Bot...")
+    bot_instance = Bot(token=token)
+    logger.info("✅ Telegram Bot initialized successfully.")
+    return bot_instance
 
-# Initialize FastAPI app
+bot = initialize_bot(TELEGRAM_TOKEN)
+
+# Initialize FastAPI App
 app = FastAPI(
     title="Adam Trading Bot Notifier",
     description="A high-quality API by AleHernándezLabs to send structured trade notifications to Telegram.",
@@ -63,6 +72,21 @@ class HealthResponse(BaseModel):
 
 class MessageRequest(BaseModel):
     message: str = Field(..., title="Message", description="Message to send to the Telegram bot")
+
+class TradeData(TypedDict):
+    side: Literal["BUY", "SELL"]
+    crypto: str
+    price: float
+    quantity: float
+    total_cost: float
+    binance_fee_percentage: float
+    binance_fee_amount: float
+    net_total: float
+    binance_order_id: str
+    profit_loss_percentage: Optional[float]
+    profit_loss_usdt: Optional[float]
+    avg_buy_price: Optional[float]
+    sell_price: Optional[float]
 
 class TradeExecutionRequest(BaseModel):
     side: Literal["BUY", "SELL"]
@@ -155,3 +179,7 @@ async def send_trade_execution(request: TradeExecutionRequest):
     except ValueError as e:
         logger.error("⚠️ Validation error in trade execution data: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
+
+# Main execution
+if __name__ == "__main__":
+    uvicorn.run("main:app", host=HOST, port=PORT, reload=(ENV == "local"))
